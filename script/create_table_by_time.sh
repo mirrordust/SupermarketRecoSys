@@ -17,9 +17,12 @@ drop table if exists trade_sd_${begindate}_${enddate};
 create table trade_sd_${begindate}_${enddate} as
 select *
 from trade_sd
-where to_date(sldat) between '${begin}' and '${end}'
-and pluno not in ('30380001', '30380002', '30380003')
-and vipno != '';"
+where to_date(sldat) between '${begin}' and '${end}';"
+#and pluno not in ('30380001', '30380002', '30380003');"
+
+#30380001 小号塑料购物袋
+#30380001 大号塑料购物袋
+#30380001 中号塑料购物袋
 
 # hive -e "
 # use reco;

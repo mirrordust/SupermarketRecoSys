@@ -11,68 +11,20 @@ from sklearn.metrics import precision_score, recall_score
 import utils
 
 
-def random_subsample(array, size):
-    if type(size) == float and 0 < size <= 1:
-        high = int(array.shape[0] * size)
-    else:
-        size = int(size)
-        high = size
-    randidx = np.random.permutation(array.shape[0])
-    high = min(high, array.shape[0])
-    print 'high: {}'.format(high)
-    subarray = array[randidx[: high]]
-    assert subarray.shape[0] < array.shape[0]
-    return subarray
-
-
-def feature_and_label(feature_df, label_df, subsample, label_first_date, datedelta_slots):
-    # 目标顾客
-    cust_label = label_df['vipno'].unique()
-    cust_label = cust_label[~np.isnan(cust_label)]
-    goal_cust = []
-    for vipno_ in cust_label:
-        subdf = feature_df[feature_df['vipno'] == vipno_]
-        n_purch = subdf.shape[0]
-        n_pluno = subdf.drop_duplicates(subset=['pluno'], keep='first').shape[0]
-        n_dpt3 = subdf.drop_duplicates(subset=['dptno3'], keep='first').shape[0]
-        if n_purch > 1 and n_pluno > 1 and n_dpt3 > 1:
-            goal_cust.append([vipno_])
-    goal_cust = np.array(goal_cust)
-    print 'n_goal_cust: {}'.format(goal_cust.shape[0])
-    # 目标商品
-    goods_label = label_df.pluno.unique()
-    goal_goods = []
-    for pluno_ in goods_label:
-        subdf = feature_df[feature_df['pluno'] == pluno_]
-        n_plu_purch = subdf.shape[0]
-        if n_plu_purch >= 4:
-            goal_goods.append(pluno_)
-    goal_goods = np.array(goal_goods)
-    print 'n_goal_goods: {}'.format(goal_goods.shape[0])
-    # 选取子集
-    if subsample:
-        if len(subsample) == 1:  # 顾客数量和商品数量一样
-            goal_cust = random_subsample(goal_cust, subsample[0])
-            goal_goods = random_subsample(goal_goods, subsample[0])
-        else:
-            goal_cust = random_subsample(goal_cust, subsample[0])
-            goal_goods = random_subsample(goal_goods, subsample[1])
-    print 'final # customers: {}, # goods: {}'.format(goal_cust.shape[0], goal_goods.shape[0])
-    customers = label_df[np.in1d(label_df['vipno'], goal_cust)].drop_duplicates(subset='vipno', keep='first')[
-        ['vipno']].reset_index(drop=True).values
-    goods = label_df[np.in1d(label_df['pluno'], goal_goods)].drop_duplicates(subset='pluno', keep='first')[
-        ['pluno', 'bndno', 'dptno3']].reset_index(drop=True).values
-    # 构建feature
-    features = utils.features(feature_df, customers, goods, label_first_date, datedelta_slots)
-    # 构建label
-    # todo: 加快速度
-    labels = [((label_df['vipno'] == vip_plu_[0]) & (label_df['pluno'] == vip_plu_[1])).any() for vip_plu_ in
-              features.iloc[:, 0:2].values]
-    labels = np.array(labels)
-    return features, labels
-
-
 def run(subsample=None, save_rootdir=None):
+    def random_subsample(array, size):
+        if type(size) == float and 0 < size <= 1:
+            high = int(array.shape[0] * size)
+        else:
+            size = int(size)
+            high = size
+        randidx = np.random.permutation(array.shape[0])
+        high = min(high, array.shape[0])
+        print 'high: {}'.format(high)
+        subarray = array[randidx[: high]]
+        assert subarray.shape[0] < array.shape[0]
+        return subarray
+
     print subsample
     if save_rootdir is not None:
         try:
@@ -90,18 +42,23 @@ def run(subsample=None, save_rootdir=None):
     dpt3 = df.dptno.apply(lambda no: str(no)[:3])
     df = df.assign(dptno3=dpt3.astype(int).values)
 
+    df_678 = utils.partition_by_month(df, [6, 7, 8])
     # 训练集
-    # 用户-商品对从label月提取
-    df_56 = utils.partition_by_month(df, month=[5, 6])
-    df_7 = utils.partition_by_month(df, month=[7])
-    # 要预测的目标用户子集C=customers，商品子集G=goods
-    customers = df_7.drop_duplicates(subset='vipno', keep='first')[['vipno']].reset_index(drop=True).values
-    goods = df_7.drop_duplicates(subset='pluno', keep='first')[['pluno', 'bndno', 'dptno3']].reset_index(
+    # 用户-商品对从label周提取
+    df_tr_feature = utils.partition_by_date(df, start_date=datetime.date(2016, 8, 1),
+                                            end_date=datetime.date(2016, 8, 17))
+    print 'df_tr_feature shape: {}'.format(df_tr_feature.shape)
+    df_tr_label = utils.partition_by_date(df, start_date=datetime.date(2016, 8, 18),
+                                          end_date=datetime.date(2016, 8, 24))
+    print 'df_tr_label shape: {}'.format(df_tr_label.shape)
+    # 要预测的用户子集C=customers，商品子集G=goods
+    customers = df_tr_label.drop_duplicates(subset='vipno', keep='first')[['vipno']].reset_index(drop=True).values
+    goods = df_tr_label.drop_duplicates(subset='pluno', keep='first')[['pluno', 'bndno', 'dptno3']].reset_index(
         drop=True).values
     if subsample:
         print 'subsampling with {}...'.format(subsample)
         if len(subsample) == 1:
-            cust_goods = df_7.drop_duplicates(subset=['vipno', 'pluno'], keep='first')[
+            cust_goods = df_tr_label.drop_duplicates(subset=['vipno', 'pluno'], keep='first')[
                 ['vipno', 'pluno', 'bndno', 'dptno3']].reset_index(drop=True).values
             cust_goods = random_subsample(cust_goods, subsample[0])
             df_t = pd.DataFrame(data=cust_goods, columns=['vipno', 'pluno', 'bndno', 'dptno3'])
@@ -113,14 +70,14 @@ def run(subsample=None, save_rootdir=None):
             goods = random_subsample(goods, subsample[1])
 
     print '# customers: {}, # goods: {}'.format(customers.shape[0], goods.shape[0])
-    training_first_date = datetime.date(2016, 7, 1)
-    training_data = utils.features(df_56, customers, goods, training_first_date, utils.datedelta_slots,
+    training_first_date = datetime.date(2016, 8, 18)
+    training_data = utils.features(df_tr_feature, customers, goods, training_first_date, utils.datedelta_slots_2_weeks,
                                    loadfromfile=False)
     if save_rootdir is not None:
         training_data.to_csv('./{}/training_data.csv'.format(save_rootdir))
 
-    training_label = [((df_7['vipno'] == vip_plu_[0]) & (df_7['pluno'] == vip_plu_[1])).any() for vip_plu_ in
-                      training_data.iloc[:, 0:2].values]
+    training_label = [((df_tr_label['vipno'] == vip_plu_[0]) & (df_tr_label['pluno'] == vip_plu_[1])).any() for vip_plu_
+                      in training_data.iloc[:, 0:2].values]
     training_label = np.array(training_label)
 
     if save_rootdir is not None:
@@ -130,17 +87,19 @@ def run(subsample=None, save_rootdir=None):
                                                                   np.array(training_label))
 
     # 测试集
-    df_67 = utils.partition_by_month(df, month=[6, 7])
-    df_8 = utils.partition_by_month(df, month=[8])
-    testing_first_date = datetime.date(2016, 8, 1)
-    customers_2 = df_8.drop_duplicates(subset='vipno', keep='first')[['vipno']].reset_index(drop=True).values
-    goods_2 = df_8.drop_duplicates(subset='pluno', keep='first')[['pluno', 'bndno', 'dptno3']].reset_index(
+    df_te_feature = utils.partition_by_date(df, start_date=datetime.date(2016, 8, 8),
+                                            end_date=datetime.date(2016, 8, 24))
+    df_te_label = utils.partition_by_date(df, start_date=datetime.date(2016, 8, 25),
+                                          end_date=datetime.date(2016, 8, 31))
+    testing_first_date = datetime.date(2016, 8, 25)
+    customers_2 = df_te_label.drop_duplicates(subset='vipno', keep='first')[['vipno']].reset_index(drop=True).values
+    goods_2 = df_te_label.drop_duplicates(subset='pluno', keep='first')[['pluno', 'bndno', 'dptno3']].reset_index(
         drop=True).values
 
     if subsample:
         print 'subsampling with {}...'.format(subsample)
         if len(subsample) == 1:
-            cust_goods_2 = df_8.drop_duplicates(subset=['vipno', 'pluno'], keep='first')[
+            cust_goods_2 = df_te_label.drop_duplicates(subset=['vipno', 'pluno'], keep='first')[
                 ['vipno', 'pluno', 'bndno', 'dptno3']].reset_index(drop=True).values
             cust_goods_2 = random_subsample(cust_goods_2, subsample[0])
             df_t = pd.DataFrame(data=cust_goods_2, columns=['vipno', 'pluno', 'bndno', 'dptno3'])
@@ -152,14 +111,14 @@ def run(subsample=None, save_rootdir=None):
             goods_2 = random_subsample(goods_2, subsample[1])
 
     print '# customers: {}, # goods: {}'.format(customers_2.shape[0], goods_2.shape[0])
-    testing_data = utils.features(df_67, customers_2, goods_2, testing_first_date, utils.datedelta_slots,
-                                  loadfromfile=False)
+    testing_data = utils.features(df_te_feature, customers_2, goods_2, testing_first_date,
+                                  utils.datedelta_slots_2_weeks, loadfromfile=False)
 
     if save_rootdir is not None:
         testing_data.to_csv('./{}/testing_data.csv'.format(save_rootdir))
 
-    testing_label = [((df_8['vipno'] == vip_plu_[0]) & (df_8['pluno'] == vip_plu_[1])).any() for vip_plu_ in
-                     testing_data.iloc[:, 0:2].values]
+    testing_label = [((df_te_label['vipno'] == vip_plu_[0]) & (df_te_label['pluno'] == vip_plu_[1])).any() for vip_plu_
+                     in testing_data.iloc[:, 0:2].values]
     testing_label = np.array(testing_label)
 
     if save_rootdir is not None:
@@ -195,15 +154,8 @@ def run(subsample=None, save_rootdir=None):
     assert np.sum(results[:, 1] != results[:, 2]) == 0
 
     precisions = results[:, 1]
-    report_str = 'min precision: {}, max precision: {}, mean precision: {}, median precision: {}, 70% precision: {}, ' \
-                 '80% precision: {}, 90% precision: {}'.format(np.min(precisions), np.max(precisions),
-                                                               np.mean(precisions), np.median(precisions),
-                                                               utils.cdf_percentage(precisions, 0.7),
-                                                               utils.cdf_percentage(precisions, 0.8),
-                                                               utils.cdf_percentage(precisions, 0.9))
-    print report_str
-    with open('./{}/report.txt'.format(save_rootdir), 'w') as f:
-        f.write(report_str)
+    print 'mean precisions: {}, median precisions: {}, max precisions: {}, min precisions: {}'.format(
+        np.mean(precisions), np.median(precisions), np.max(precisions), np.min(precisions))
     # precision/recall
     X, Y = utils.cdf(precisions)
     if save_rootdir is not None:
@@ -220,6 +172,7 @@ def run(subsample=None, save_rootdir=None):
 if __name__ == '__main__':
     import time
     import datetime
+    import cProfile
 
     start = time.clock()
     print 'start: {}'.format(start)
@@ -230,6 +183,7 @@ if __name__ == '__main__':
     if len(args) == 1:
         print 'run with all customers & goods from label month'
         run(save_rootdir=rootdir)
+        # cProfile.run('run(save_rootdir=rootdir)', filename='./{}/cProfile.out'.format(rootdir))
     else:
         assert len(args) <= 3
         if len(args) == 2:
@@ -238,5 +192,6 @@ if __name__ == '__main__':
             subsample = (float(args[1]), float(args[2]))
         print 'run with subsample = {}'.format(subsample)
         run(subsample, save_rootdir=rootdir)
+        # cProfile.run('run(subsample, save_rootdir=rootdir)', filename='./{}/cProfile.out'.format(rootdir))
     end = time.clock()
     print 'end: {}, duration: {}'.format(end, end - start)
