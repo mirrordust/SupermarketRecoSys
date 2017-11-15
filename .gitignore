@@ -1,4 +1,9 @@
 .idea/
+.vscode/
+
+.ipynb_checkpoints/
+
+*.ipynb
+*.sh
 
 data/
-

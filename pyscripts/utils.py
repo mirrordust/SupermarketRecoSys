@@ -19,7 +19,8 @@ def backward_date_slots(base_datetime, datedelta_slots):
     date_slots = []
     for slot in datedelta_slots:
         dates = [base_datetime - datetime.timedelta(days=i) for i in slot]
-        date_slots.append(dates)
+        dates.reverse()
+        date_slots.append(tuple(dates))
     return date_slots
 
 
@@ -74,122 +75,29 @@ def get_date(v):
 
 # 距离预测日期前 第1天、第2天、第3天、前3天、前5天、前7天、前10天、前14天、前21天、前28天、前40天、前50天、前59天 被购买次数
 datedelta_slots = np.array(
-    [np.array([1]), np.array([2]), np.array([3]), np.arange(3) + 1, np.arange(5) + 1, np.arange(7) + 1,
-     np.arange(10) + 1, np.arange(14) + 1, np.arange(21) + 1, np.arange(28) + 1, np.arange(40) + 1, np.arange(50) + 1,
-     np.arange(59) + 1])
+    [(1, 1), (2, 2), (3, 3), (1, 3), (1, 5), (1, 7), (1, 10), (1, 14), (1, 21), (1, 28), (1, 40), (1, 50), (1, 59)])
 
-datedelta_slots_2_weeks = np.array(
-    [np.array([1]), np.array([2]), np.array([3]), np.arange(3) + 1, np.arange(5) + 1, np.arange(7) + 1,
-     np.arange(10) + 1, np.arange(14) + 1])
-
-
-# 构建用户特征
-# def features_cust(df, predict_first_date, datedelta_slots):
-#     cust_behavs = []
-#     df_cust_features = df.drop_duplicates(subset='vipno', keep='first')[['vipno']].reset_index(drop=True)
-#     date_slots = backward_date_slots(predict_first_date, datedelta_slots)
-#     last_date_slot = backward_date_slots(predict_first_date, [datedelta_slots[-1]])
-#     for cust_ in df_cust_features.values:
-#         cust_vipno = cust_[0]
-#         df_cust = df[df['vipno'] == cust_vipno]
-#         # 不同时间段内购买商品数
-#         ds = map(get_date, df_cust.sldat)
-#         # feature vector 1
-#         purch_count = [np.sum(np.in1d(ds, dates)) for dates in date_slots]
-#         # 前59天有购买行为的日期
-#         day_purch_or_not = np.in1d(last_date_slot, ds)
-#         day_purch_or_not = day_purch_or_not.astype(int)  # feature verctor 2
-#         # 最后一次购买的日期距预测日期的天数
-#         last_purch_day = max(ds)
-#         min_daydelta = abs((last_purch_day - predict_first_date).days)  # feature vector 3
-#         # 合并(第一列为vipno)
-#         behav = np.concatenate((cust_, purch_count, day_purch_or_not, [min_daydelta]))
-#         cust_behavs.append(behav)
-#     return np.array(cust_behavs)
-
-
-# 构建商品特征
-# def features_goods(df, predict_first_date, datedelta_slots):
-#     goods_behavs = []
-#     df_goods_features = df.drop_duplicates(subset='pluno', keep='first')[['pluno', 'bndno', 'dptno3']].reset_index(
-#         drop=True)
-#     date_slots = backward_date_slots(predict_first_date, datedelta_slots)
-#     print '# goods:', df_goods_features.shape[0]
-#     i = 0
-#     for goods_ in df_goods_features.values:
-#         if i == int(0.33 * df_goods_features.shape[0]):
-#             print '33% finish'
-#         elif i == int(0.66 * df_goods_features.shape[0]):
-#             print '66% finish'
-#         i = i + 1
-#         # 商品被购买次数
-#         pluno = goods_[0]
-#         df_goods = df[df['pluno'] == pluno]
-#         ds1 = map(get_date, df_goods.sldat)
-#         # feature vector 1
-#         purch_goods_count = [np.sum(np.in1d(ds1, dates)) for dates in date_slots]
-#         # 商品种类被购买次数
-#         dptno3 = goods_[2]
-#         df_cates = df[df['dptno3'] == dptno3]
-#         ds2 = map(get_date, df_cates.sldat)
-#         # feature vector 2
-#         purch_cates_count = [np.sum(np.in1d(ds2, dates)) for dates in date_slots]
-#         # 合并(第一列为pluno)
-#         behav = np.concatenate((goods_, purch_goods_count, purch_cates_count))
-#         goods_behavs.append(behav)
-#     return np.array(goods_behavs)
-
-
-# 构建用户-商品特征
-# def features_cust_goods(df, predict_first_date, datedelta_slots):
-#     custgoods_behavs = []
-#     df_custgoods_pairs = df.drop_duplicates(subset=['vipno', 'pluno'], keep='first')[
-#         ['vipno', 'pluno', 'dptno3']].reset_index(drop=True)
-#     date_slots = backward_date_slots(predict_first_date, datedelta_slots)
-#     print '# df_custgoods_pairs: ', df_custgoods_pairs.shape[0]
-#     i = 0
-#     for custgoods_ in df_custgoods_pairs.values:
-#         if i == int(0.25 * df_custgoods_pairs.shape[0]):
-#             print '25% finish'
-#         elif i == int(0.5 * df_custgoods_pairs.shape[0]):
-#             print '50% finish'
-#         elif i == int(0.75 * df_custgoods_pairs.shape[0]):
-#             print '75% finish'
-#         i = i + 1
-#         vipno_ = custgoods_[0]
-#         pluno_ = custgoods_[1]
-#         dptno3_ = custgoods_[2]
-#         # 商品被用户购买次数
-#         df_cust_goods = df[(df['vipno'] == vipno_) & (df['pluno'] == pluno_)]
-#         ds1 = map(get_date, df_cust_goods.sldat)
-#         # feature vector 1
-#         purch_goods_count = [np.sum(np.in1d(ds1, dates)) for dates in date_slots]
-#         # 商品种类被用户购买次数
-#         df_cust_cates = df[(df['vipno'] == vipno_) & (df['dptno3'] == dptno3_)]
-#         ds2 = map(get_date, df_cust_cates.sldat)
-#         # feature vector 2
-#         purch_cates_count = [np.sum(np.in1d(ds2, dates)) for dates in date_slots]
-#         # 合并
-#         behav = np.concatenate(([vipno_, pluno_], purch_goods_count, purch_cates_count))
-#         custgoods_behavs.append(behav)
-#     return np.array(custgoods_behavs)
+datedelta_slots_2_weeks = np.array([(1, 1), (2, 2), (3, 3), (1, 3), (1, 5), (1, 7), (1, 10), (1, 14)])
 
 
 def customer_features(source_df, customers, predict_first_date, datedelta_slots):
     cust_behavs = []
     date_slots = backward_date_slots(predict_first_date, datedelta_slots)
-    last_date_slot = backward_date_slots(predict_first_date, [datedelta_slots[-1]])[0]
+    last_date_slot = backward_date_slots(predict_first_date, [np.arange(datedelta_slots[-1][1]) + 1])[0]
     print '# customers:', customers.shape[0]
     for cust_ in customers:
         vipno_ = cust_[0]
         df_cust = source_df[source_df['vipno'] == vipno_]
         if df_cust.shape[0] == 0:
+            # todo：无购买的最近一次购买记录间隔天数怎么确定
             behav = np.concatenate(([vipno_], np.zeros(len(datedelta_slots) + len(last_date_slot)), [999]))
         else:
             # 不同时间段内购买商品数
             ds = map(get_date, df_cust.sldat)
+            ds = np.array(ds)
             # feature vector 1
-            purch_count = [np.sum(np.in1d(ds, dates)) for dates in date_slots]
+            # purch_count = [np.sum(np.in1d(ds, dates)) for dates in date_slots]
+            purch_count = [np.sum(np.logical_and(ds >= dates[0], ds <= dates[1])) for dates in date_slots]
             # 前59天有购买行为的日期
             day_purch_or_not = np.in1d(last_date_slot, ds)
             day_purch_or_not = day_purch_or_not.astype(int)  # feature verctor 2
@@ -223,8 +131,10 @@ def goods_features(source_df, goods, predict_first_date, datedelta_slots):
             purch_goods_count = np.zeros(len(datedelta_slots))
         else:
             ds1 = map(get_date, df_goods.sldat)
+            ds1 = np.array(ds1)
             # feature vector 1
-            purch_goods_count = [np.sum(np.in1d(ds1, dates)) for dates in date_slots]
+            purch_goods_count = [np.sum(np.logical_and(ds1 >= dates[0], ds1 <= dates[1])) for dates in date_slots]
+        # todo:加快速度：先计算unique的dptnp3再merge
         # 商品种类被购买次数
         dptno3 = goods_[2]
         df_cates = source_df[source_df['dptno3'] == dptno3]
@@ -232,8 +142,9 @@ def goods_features(source_df, goods, predict_first_date, datedelta_slots):
             purch_cates_count = np.zeros(len(datedelta_slots))
         else:
             ds2 = map(get_date, df_cates.sldat)
+            ds2 = np.array(ds2)
             # feature vector 2
-            purch_cates_count = [np.sum(np.in1d(ds2, dates)) for dates in date_slots]
+            purch_cates_count = [np.sum(np.logical_and(ds2 >= dates[0], ds2 <= dates[1])) for dates in date_slots]
         # 合并(第一列为pluno)
         behav = np.concatenate((goods_, purch_goods_count, purch_cates_count))
         goods_behavs.append(behav)
@@ -268,43 +179,55 @@ def custs_goods_features(source_df, customers, goods, predict_first_date, datede
                 purch_goods_count = np.zeros(len(datedelta_slots))
             else:
                 ds1 = map(get_date, df_cust_goods.sldat)
+                ds1 = np.array(ds1)
                 # feature vector 1
-                purch_goods_count = [np.sum(np.in1d(ds1, dates)) for dates in date_slots]
+                purch_goods_count = [np.sum(np.logical_and(ds1 >= dates[0], ds1 <= dates[1])) for dates in date_slots]
             # 商品种类被用户购买次数
             df_cust_cates = df_cust[df_cust['dptno3'] == dptno3_]
             if df_cust_cates.shape[0] == 0:
                 purch_cates_count = np.zeros(len(datedelta_slots))
             else:
                 ds2 = map(get_date, df_cust_cates.sldat)
+                ds2 = np.array(ds2)
                 # feature vector 2
-                purch_cates_count = [np.sum(np.in1d(ds2, dates)) for dates in date_slots]
+                purch_cates_count = [np.sum(np.logical_and(ds2 >= dates[0], ds2 <= dates[1])) for dates in date_slots]
             # 合并
             behav = np.concatenate(([vipno_, pluno_], purch_goods_count, purch_cates_count))
             custgoods_behavs.append(behav)
     return np.array(custgoods_behavs)
 
 
-def features(source_df, customers, goods, predict_first_date, datedelta_slots, loadfromfile=False):
+def features(source_df, customers, goods, predict_first_date, datedelta_slots):
+    """特征提取
+
+    用户：
+    1. 距离预测日期前 第1天、第2天、第3天、前3天、前5天、前7天、前10天、前14天、前21天、前28天、前40天、前50天、前59天 购买次数
+    2. 前59天有购买行为的日期
+    3. 最后一次购买的日期距预测日期的天数
+
+    商品：
+    1. 距离预测日期前 第1天、第2天、第3天、前3天、前5天、前7天、前10天、前14天、前21天、前28天、前40天、前50天、前59天 被购买次数
+    2. 距离预测日期前 第1天、第2天、第3天、前3天、前5天、前7天、前10天、前14天、前21天、前28天、前40天、前50天、前59天 该商品种类 被购买次数
+
+    用户-商品：
+    1. 距离预测日期前 第1天、第2天、第3天、前3天、前5天、前7天、前10天、前14天、前21天、前28天、前40天、前50天、前59天
+    商品G被用户U 购买次数
+    2. 距离预测日期前 第1天、第2天、第3天、前3天、前5天、前7天、前10天、前14天、前21天、前28天、前40天、前50天、前59天
+    商品种类C被用户U 购买次数
+    """
     timestr = '{}_{}_{}'.format(predict_first_date.year, predict_first_date.month, predict_first_date.day)
-    # 在前两个月的数据中提取指定的customers、goods、custs-goods的特征
-    if loadfromfile:
-        print 'loadfromfile...'
-        cust_f = pd.read_csv('cust_f_{}.csv'.format(timestr)).values
-        goods_f = pd.read_csv('goods_f_{}.csv'.format(timestr)).values
-        custgoods_f = pd.read_csv('custgoods_f_{}.csv'.format(timestr)).values
-    else:
-        # customers
-        cust_f = customer_features(source_df, customers, predict_first_date, datedelta_slots)
-        print 'cust features finish'
-        pd.DataFrame(data=cust_f).to_csv('cust_f_{}.csv'.format(timestr), index=False)
-        # goods
-        goods_f = goods_features(source_df, goods, predict_first_date, datedelta_slots)
-        print 'goods features finish'
-        pd.DataFrame(data=goods_f).to_csv('goods_f_{}.csv'.format(timestr), index=False)
-        # custs-goods
-        custgoods_f = custs_goods_features(source_df, customers, goods, predict_first_date, datedelta_slots)
-        print 'custgoods features finish'
-        pd.DataFrame(data=custgoods_f).to_csv('custgoods_f_{}.csv'.format(timestr), index=False)
+    # customers
+    cust_f = customer_features(source_df, customers, predict_first_date, datedelta_slots)
+    print 'cust features finish'
+    # pd.DataFrame(data=cust_f).to_csv('cust_f_{}.csv'.format(timestr), index=False)
+    # goods
+    goods_f = goods_features(source_df, goods, predict_first_date, datedelta_slots)
+    print 'goods features finish'
+    # pd.DataFrame(data=goods_f).to_csv('goods_f_{}.csv'.format(timestr), index=False)
+    # custs-goods
+    custgoods_f = custs_goods_features(source_df, customers, goods, predict_first_date, datedelta_slots)
+    print 'custgoods features finish'
+    # pd.DataFrame(data=custgoods_f).to_csv('custgoods_f_{}.csv'.format(timestr), index=False)
 
     cust_df = pd.DataFrame(data=cust_f)
     cust_df.columns = ['vipno'] + ['cust_' + str(i) for i in range(1, cust_df.shape[1])]
@@ -316,43 +239,10 @@ def features(source_df, customers, goods, predict_first_date, datedelta_slots, l
     training_data = custgoods_df.iloc[:, 0:2]
     merge1 = pd.merge(training_data, cust_df, sort=False, on='vipno', how='left', copy=False)
     merge2 = pd.merge(merge1, goods_df, sort=False, on='pluno', how='left', copy=False)
-    merge2 = merge2.fillna(-1)
+    merge2 = merge2.fillna(-1)  # todo:改进：填充nan的bndno
     merge3 = pd.merge(merge2, custgoods_df, sort=False, on=['vipno', 'pluno'], how='left', copy=False)
     return merge3
 
-
-# def extract_features(df, predict_first_date, datedelta_slots, loadfromfile=False):
-#     timestr = '{}_{}_{}'.format(predict_first_date.year, predict_first_date.month, predict_first_date.day)
-#     # 前两个月的数据提取特征
-#     if loadfromfile:
-#         cust_f = np.loadtxt('cust_f_{}.csv'.format(timestr), delimiter=',')
-#         goods_f = np.loadtxt('goods_f_{}.csv'.format(timestr), delimiter=',')
-#         custgoods_f = np.loadtxt('custgoods_f_{}.csv'.format(timestr), delimiter=',')
-#     else:
-#         # customers
-#         cust_f = features_cust(df, predict_first_date, datedelta_slots)
-#         print 'cust features finish'
-#         np.savetxt('cust_f_{}.csv'.format(timestr), cust_f, delimiter=',')
-#         # goods
-#         goods_f = features_goods(df, predict_first_date, datedelta_slots)
-#         print 'goods features finish'
-#         np.savetxt('goods_f_{}.csv'.format(timestr), goods_f, delimiter=',')
-#         # custs-goods
-#         custgoods_f = features_cust_goods(df, predict_first_date, datedelta_slots)
-#         print 'custgoods features finish'
-#         np.savetxt('custgoods_f_{}.csv'.format(timestr), custgoods_f, delimiter=',')
-#     cust_df = pd.DataFrame(data=cust_f)
-#     cust_df.columns = ['vipno'] + ['cust_' + str(i) for i in range(1, cust_df.shape[1])]
-#     goods_df = pd.DataFrame(data=goods_f)
-#     goods_df.columns = ['pluno'] + ['goods_' + str(i) for i in range(1, goods_df.shape[1])]
-#     custgoods_df = pd.DataFrame(data=custgoods_f)
-#     custgoods_df.columns = ['vipno', 'pluno'] + ['custgoods_' + str(i) for i in range(2, custgoods_df.shape[1])]
-#     training_data = custgoods_df.iloc[:, 0:2]
-#     merge1 = pd.merge(training_data, cust_df, sort=False, on='vipno', how='left', copy=False)
-#     merge2 = pd.merge(merge1, goods_df, sort=False, on='pluno', how='left', copy=False)
-#     merge2 = merge2.fillna(-1)
-#     merge3 = pd.merge(merge2, custgoods_df, sort=False, on=['vipno', 'pluno'], how='left', copy=False)
-#     return merge3
 
 # Report part
 
@@ -363,7 +253,7 @@ def precision_at_k(true_label, predict_prob, k):
     idx = np.argsort(-predict_prob)
     true_label = true_label[idx]
     n_relevant = np.sum(true_label[:k])
-    precision = float(n_relevant) / k
+    precision = float(n_relevant) / k if k != 0 else 1
     return precision
 
 
@@ -395,7 +285,7 @@ def precision_top_k(true_label, predict_prob):
     idx = np.argsort(-predict_prob)
     true_label = true_label[idx]
     n_relevant = np.sum(true_label[:k])
-    precision = float(n_relevant) / k
+    precision = float(n_relevant) / k if k != 0 else 1
     return precision
 
 
@@ -407,7 +297,7 @@ def recall_top_k(true_label, predict_prob):
     idx = np.argsort(-predict_prob)
     true_label = true_label[idx]
     n_relevant = np.sum(true_label[:k])
-    recall = float(n_relevant) / k
+    recall = float(n_relevant) / k if k != 0 else 1
     return recall
 
 
@@ -417,35 +307,16 @@ def cdf_percentage(data, p):
     return data[int(len(data) * p)]
 
 
-# def get_report(proba, true_label):
-#     idx = np.argsort(-proba)
-#     proba = proba[idx]
-#     true_label = true_label[idx]
-#     auc = roc_auc_score(true_label, proba)
-#     print 'Total\t%d\nbuyer\t%d\nRate\t%5.4f\nAUC\t%5.4f' % (
-#         true_label.size, sum(true_label), float(sum(true_label)) / true_label.size, auc)
-#     valid_size = [100, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 900, 1000]
-#     print 'Top\tbuyer\tRecall\tPrecision\t'
-#     predict = np.zeros(true_label.size)
-#     for size in valid_size:
-#         predict[0:size] = 1
-#         recall = recall_score(true_label, predict, average='binary')
-#         precision = precision_score(true_label, predict, average='binary')
-#         label = true_label[:size]
-#         buyer = len(np.where(label == 1)[0])
-#         print '%d\t%d\t%5.4f\t%5.4f' % (size, buyer, recall, precision)
-
 def cdf(data, remove_zero=False):
-    # print 'data size = %s' % data.shape[0]
     if remove_zero:
         data = data[data != 0]
-        # print 'nonzero data size = %s' % data.shape[0]
     data_sorted = np.sort(data)
     p = 1. * np.arange(len(data)) / (len(data) - 1)
     return data_sorted, p
 
 
 # Plot part
+
 def plot_cdfs(Xs, Ys, labels, xlabel, ylabel, save=None, xylimits=None):
     assert len(Xs) == len(Ys) == len(labels)
     fig = plt.figure(figsize=(15, 15))
