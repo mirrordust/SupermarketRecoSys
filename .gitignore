@@ -6,4 +6,6 @@
 *.ipynb
 *.sh
 
+*.pyc
+
 data/
