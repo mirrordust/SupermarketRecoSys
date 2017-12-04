@@ -21,12 +21,12 @@ def random_subsample(array, size):
     high = min(high, array.shape[0])
     print 'high: {}'.format(high)
     subarray = array[randidx[: high]]
-    assert subarray.shape[0] < array.shape[0]
+    assert subarray.shape[0] <= array.shape[0]
     return subarray
 
 
 def feature_and_label(feature_df, label_df, subsample, label_first_date, datedelta_slots, cust_amt_thr=None,
-                      cust_purch_thr=None, goods_purch_thr=None):
+                      cust_purch_thr=None, goods_purch_thr=None, svd=False):
     # 目标顾客
     cust_label = label_df['vipno'].unique()
     cust_label = cust_label[~np.isnan(cust_label)]
@@ -77,7 +77,7 @@ def feature_and_label(feature_df, label_df, subsample, label_first_date, datedel
     goods = label_df[np.in1d(label_df['pluno'], goal_goods)].drop_duplicates(subset='pluno', keep='first')[
         ['pluno', 'bndno', 'dptno3']].reset_index(drop=True).values
     # 构建feature
-    features = utils.features(feature_df, customers, goods, label_first_date, datedelta_slots)
+    features = utils.features(feature_df, customers, goods, label_first_date, datedelta_slots, svd)
     print 'features finish.'
     # 构建label
     # todo: 加快速度
@@ -88,7 +88,7 @@ def feature_and_label(feature_df, label_df, subsample, label_first_date, datedel
     return features, labels
 
 
-def run(subsample=None, save_rootdir=None, cust_amt_thr=None, cust_purch_thr=None, goods_purch_thr=None):
+def run(subsample=None, save_rootdir=None, cust_amt_thr=None, cust_purch_thr=None, goods_purch_thr=None, svd=False):
     print subsample
     if save_rootdir is not None:
         try:
@@ -113,7 +113,8 @@ def run(subsample=None, save_rootdir=None, cust_amt_thr=None, cust_purch_thr=Non
     training_first_date = datetime.date(2016, 7, 1)
     training_data, training_label = feature_and_label(df_56, df_7, subsample, training_first_date,
                                                       utils.datedelta_slots, cust_amt_thr=cust_amt_thr,
-                                                      cust_purch_thr=cust_purch_thr, goods_purch_thr=goods_purch_thr)
+                                                      cust_purch_thr=cust_purch_thr, goods_purch_thr=goods_purch_thr,
+                                                      svd=svd)
 
     if save_rootdir is not None:
         training_data.to_csv('./{}/training_data.csv'.format(save_rootdir))
@@ -128,7 +129,7 @@ def run(subsample=None, save_rootdir=None, cust_amt_thr=None, cust_purch_thr=Non
     testing_first_date = datetime.date(2016, 8, 1)
     testing_data, testing_label = feature_and_label(df_67, df_8, subsample, testing_first_date, utils.datedelta_slots,
                                                     cust_amt_thr=cust_amt_thr, cust_purch_thr=cust_purch_thr,
-                                                    goods_purch_thr=goods_purch_thr)
+                                                    goods_purch_thr=goods_purch_thr, svd=svd)
 
     if save_rootdir is not None:
         testing_data.to_csv('./{}/testing_data.csv'.format(save_rootdir))
@@ -155,6 +156,9 @@ def run(subsample=None, save_rootdir=None, cust_amt_thr=None, cust_purch_thr=Non
         first_hit = utils.first_hit(sub_testing_label, proba)
         results.append([vipno_, precision, recall, first_hit])
     results = np.array(results)
+
+    if save_rootdir is not None:
+        np.savetxt('./{}/results.csv'.format(save_rootdir), results, delimiter=',')
 
     assert np.sum(results[:, 1] != results[:, 2]) == 0
 
@@ -192,6 +196,7 @@ if __name__ == '__main__':
     parser.add_option('-a', '--amt', dest='cust_amt_thr', help='cust_amt_thr')
     parser.add_option('-p', '--plu', dest='cust_purch_thr', help='cust_purch_thr')
     parser.add_option('-g', '--gpu', dest='goods_purch_thr', help='goods_purch_thr')
+    parser.add_option('-m', '--mf', dest='mf', help='add svd feature')
 
     # args = sys.argv
     (options, args) = parser.parse_args()
@@ -207,9 +212,11 @@ if __name__ == '__main__':
     cust_amt_thr = options.cust_amt_thr if options.cust_amt_thr is None else float(options.cust_amt_thr)
     cust_purch_thr = options.cust_purch_thr if options.cust_purch_thr is None else float(options.cust_purch_thr)
     goods_purch_thr = options.goods_purch_thr if options.goods_purch_thr is None else int(options.goods_purch_thr)
+    svd = True if options.mf else False
+    print 'svd = {}'.format(svd)
 
     run((float(subsample),), rootdir, cust_amt_thr=cust_amt_thr, cust_purch_thr=cust_purch_thr,
-        goods_purch_thr=goods_purch_thr)
+        goods_purch_thr=goods_purch_thr, svd=svd)
     # if len(args) == 1:
     #     print 'run with all customers & goods from label month'
     #     run(save_rootdir=rootdir)

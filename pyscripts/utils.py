@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
+from svd_feature import *
 import sys
 
 
@@ -151,7 +152,7 @@ def goods_features(source_df, goods, predict_first_date, datedelta_slots):
     return np.array(goods_behavs)
 
 
-def custs_goods_features(source_df, customers, goods, predict_first_date, datedelta_slots):
+def custs_goods_features(source_df, customers, goods, predict_first_date, datedelta_slots, svd=False):
     custgoods_behavs = []
     # df_custgoods_pairs = df.drop_duplicates(subset=['vipno', 'pluno'], keep='first')[
     #     ['vipno', 'pluno', 'dptno3']]
@@ -159,6 +160,7 @@ def custs_goods_features(source_df, customers, goods, predict_first_date, datede
     n_loop = customers.shape[0] * goods.shape[0]
     print '# custgoods_pairs: ', n_loop
     i = 0
+    svd_input = []
     for cust_ in customers:
         vipno_ = cust_[0]
         df_cust = source_df[source_df['vipno'] == vipno_]
@@ -175,6 +177,9 @@ def custs_goods_features(source_df, customers, goods, predict_first_date, datede
             dptno3_ = goods_[2]
             # 商品被用户购买次数
             df_cust_goods = df_cust[df_cust['pluno'] == pluno_]
+
+            svd_input.append([vipno_, pluno_, df_cust_goods.shape[0]])
+
             if df_cust_goods.shape[0] == 0:
                 purch_goods_count = np.zeros(len(datedelta_slots))
             else:
@@ -194,10 +199,19 @@ def custs_goods_features(source_df, customers, goods, predict_first_date, datede
             # 合并
             behav = np.concatenate(([vipno_, pluno_], purch_goods_count, purch_cates_count))
             custgoods_behavs.append(behav)
+
+    if svd:
+        # add svd feature
+        svd_input = np.array(svd_input)
+        config = Config(6, 0.1, 0.05)
+        _, pu, qi = svd_features(config, svd_input)
+        print 'svd features finish.'
+        custgoods_behavs = [np.concatenate((row, pu[row[0]], qi[row[1]])) for row in custgoods_behavs]
+
     return np.array(custgoods_behavs)
 
 
-def features(source_df, customers, goods, predict_first_date, datedelta_slots):
+def features(source_df, customers, goods, predict_first_date, datedelta_slots, svd=False):
     """特征提取
 
     用户：
@@ -225,7 +239,7 @@ def features(source_df, customers, goods, predict_first_date, datedelta_slots):
     print 'goods features finish'
     # pd.DataFrame(data=goods_f).to_csv('goods_f_{}.csv'.format(timestr), index=False)
     # custs-goods
-    custgoods_f = custs_goods_features(source_df, customers, goods, predict_first_date, datedelta_slots)
+    custgoods_f = custs_goods_features(source_df, customers, goods, predict_first_date, datedelta_slots, svd)
     print 'custgoods features finish'
     # pd.DataFrame(data=custgoods_f).to_csv('custgoods_f_{}.csv'.format(timestr), index=False)
 
@@ -282,6 +296,7 @@ def precision_top_k(true_label, predict_prob):
     Calculate precision with setting K = n_positive.
     """
     k = np.sum(true_label)
+    k = int(k)
     idx = np.argsort(-predict_prob)
     true_label = true_label[idx]
     n_relevant = np.sum(true_label[:k])
@@ -294,6 +309,7 @@ def recall_top_k(true_label, predict_prob):
     Calculate recall with setting K = n_positive.
     """
     k = np.sum(true_label)
+    k = int(k)
     idx = np.argsort(-predict_prob)
     true_label = true_label[idx]
     n_relevant = np.sum(true_label[:k])
